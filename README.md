@@ -1,2 +1,3 @@
-# universum-client-go
-Go client for universumDB
+# UniversumDB
+
+A simple in-memory key-value pair database written in Go.
