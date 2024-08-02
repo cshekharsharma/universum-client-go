@@ -11,14 +11,25 @@ import (
 var errUnexpectedRead = errors.New("unexpected read from socket")
 
 type connPool struct {
+	opts *Options
+
+	queue     chan struct{}
+	conns     []*Conn
+	idleConns []*Conn
 }
 
 func (cp *connPool) getConn() {
 
 }
 
-func newConnPool() *connPool {
-	return &connPool{}
+func newConnPool(opts *Options) *connPool {
+	pool := &connPool{
+		queue:     make(chan struct{}, opts.ConnPoolsize),
+		conns:     make([]*Conn, 0, opts.ConnPoolsize),
+		idleConns: make([]*Conn, 0, opts.ConnPoolsize),
+	}
+
+	return pool
 }
 
 func checkConnection(conn net.Conn) error {

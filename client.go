@@ -27,9 +27,10 @@ func (c *Client) Set(key string, value interface{}, ttl int64) (bool, error) {
 func NewClient(opts *Options) *Client {
 	opts.init()
 	currTime := time.Now().UnixNano()
+
 	return &Client{
 		id:   base64.StdEncoding.EncodeToString([]byte(strconv.Itoa(int(currTime)))),
 		opts: opts,
-		pool: newConnPool(),
+		pool: newConnPool(opts),
 	}
 }
