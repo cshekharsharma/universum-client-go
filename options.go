@@ -5,8 +5,11 @@ import (
 	"time"
 )
 
+const DefaultHostAddr = "localhost:11191"
+const DefaultClientName = "GoClient"
+
 const MaxDialTimeout = 5 * time.Second
-const MaxReadTimeout = 1 * time.Second
+const MaxReadTimeout = 3 * time.Second
 const MaxWriteTimeout = 3 * time.Second
 const AllowedMaxRetries = 1 << 4
 const MaxConnPoolsize = 1 << 16
@@ -15,9 +18,10 @@ type Options struct {
 	HostAddr   string
 	ClientName string
 
-	DialTimeout  time.Duration
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
+	DialTimeout     time.Duration
+	ConnWaitTimeout time.Duration
+	ReadTimeout     time.Duration
+	WriteTimeout    time.Duration
 
 	MaxRetries   int64
 	RetryBackoff time.Duration
@@ -30,11 +34,11 @@ type Options struct {
 
 func (o *Options) init() {
 	if o.HostAddr == "" {
-		o.HostAddr = "localhost:11191"
+		o.HostAddr = DefaultHostAddr
 	}
 
 	if o.ClientName == "" {
-		o.ClientName = "GoClient"
+		o.ClientName = DefaultClientName
 	}
 
 	if o.DialTimeout > MaxDialTimeout {
