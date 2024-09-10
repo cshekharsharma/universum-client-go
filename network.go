@@ -27,19 +27,19 @@ func sendCommand(ctx context.Context, c *Client, command string, args ...interfa
 		return nil, fmt.Errorf("resp encoding failed before sending the command: %w", ErrCommandEncodingFailed)
 	}
 
-	if _, err := conn.Write([]byte(encodedCommand)); err != nil {
+	if _, err := conn.write([]byte(encodedCommand)); err != nil {
 		return nil, fmt.Errorf("failed while writing bytes to the socket: %w", ErrSocketWriteFailed)
 	}
 
 	err = readUntilDelimiter(conn, c.opts, remoteByteDelimiter)
 	if err != nil {
-		return nil, fmt.Errorf("failed while reading bytes from the socket: %w", ErrSocketReadFailed)
+		return nil, fmt.Errorf("failed while reading bytes from the socket: [%v] %w", err, ErrSocketReadFailed)
 	}
 
-	return decodeResp(conn.reader)
+	return decodeResp(conn.getReader())
 }
 
-func readUntilDelimiter(conn *Conn, opts *Options, delim string) error {
+func readUntilDelimiter(conn connInterface, opts *Options, delim string) error {
 	delimiterBytes := []byte(delim)
 	delimiterLen := len(delimiterBytes)
 
@@ -47,14 +47,15 @@ func readUntilDelimiter(conn *Conn, opts *Options, delim string) error {
 	pipe := make([]byte, 1024) // Read in chunks
 
 	if opts.ReadTimeout > 0 {
-		err := conn.netconn.SetReadDeadline(time.Now().Add(opts.ReadTimeout))
+		err := conn.getNetConn().SetReadDeadline(time.Now().Add(opts.ReadTimeout))
 		if err != nil {
 			return fmt.Errorf("failed to set read deadline: %v", err)
 		}
 	}
 
 	for {
-		chunk, err := conn.reader.Read(pipe)
+		reader := conn.getReader()
+		chunk, err := reader.Read(pipe)
 		if err != nil {
 			if err == io.EOF {
 				return nil

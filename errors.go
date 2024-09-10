@@ -4,9 +4,10 @@ import "errors"
 
 // Networking errors
 var (
-	ErrConnectionDialFailed  = errors.New("CONN_DIAL_FAILED")
-	ErrConnectionDialTimeout = errors.New("CONN_DIAL_TIMEOUT")
-	ErrConnectionWaitTimeout = errors.New("CONN_WAIT_TIMEOUT")
+	ErrConnectionDialFailed   = errors.New("CONN_DIAL_FAILED")
+	ErrConnectionDialTimeout  = errors.New("CONN_DIAL_TIMEOUT")
+	ErrConnectionWaitTimeout  = errors.New("CONN_WAIT_TIMEOUT")
+	ErrConnectionConfigFailed = errors.New("CONN_CONFIG_FAILED")
 
 	ErrConnectionPoolClosed = errors.New("CONN_POOL_CLOSED")
 

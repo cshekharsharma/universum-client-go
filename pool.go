@@ -23,8 +23,8 @@ type connPool struct {
 	options   *Options
 	connMutex sync.Mutex
 
-	connections     []*Conn
-	idleConnections []*Conn
+	connections     []connInterface
+	idleConnections []connInterface
 	waitQueue       chan struct{}
 
 	poolsize     int64
@@ -32,11 +32,16 @@ type connPool struct {
 	isClosed     uint32
 }
 
-func (cp *connPool) createConn() (*Conn, error) {
-	return newConnection(cp.options)
+func (cp *connPool) createConn() (connInterface, error) {
+	conn, err := newConnection(cp.options)
+	if cp.poolsize < cp.options.ConnPoolsize {
+		conn.setPooled(true)
+		cp.poolsize++
+	}
+	return conn, err
 }
 
-func (cp *connPool) GetConn(ctx context.Context) (*Conn, error) {
+func (cp *connPool) GetConn(ctx context.Context) (connInterface, error) {
 	if cp.closed() {
 		return nil, ErrConnectionPoolClosed
 	}
@@ -73,6 +78,10 @@ func (cp *connPool) GetConn(ctx context.Context) (*Conn, error) {
 		return nil, err
 	}
 
+	cp.connMutex.Lock()
+	cp.connections = append(cp.connections, newConn)
+	cp.connMutex.Unlock()
+
 	return newConn, nil
 }
 
@@ -99,12 +108,14 @@ func (cp *connPool) waitForTurn(ctx context.Context) error {
 		}
 		reusableTimers.Put(timer)
 		return ctx.Err()
+
 	case cp.waitQueue <- struct{}{}:
 		if !timer.Stop() {
 			<-timer.C
 		}
 		reusableTimers.Put(timer)
 		return nil
+
 	case <-timer.C:
 		reusableTimers.Put(timer)
 		return fmt.Errorf("request timed out while waiting for turn in pool: %w", ErrConnectionWaitTimeout)
@@ -115,16 +126,16 @@ func (cp *connPool) freeTurn() {
 	<-cp.waitQueue
 }
 
-func (cp *connPool) isActiveConnection(conn *Conn) bool {
+func (cp *connPool) isActiveConnection(conn connInterface) bool {
 	now := time.Now()
 
-	if cp.options.ConnMaxLifetime > 0 && now.Sub(conn.createdAt) >= cp.options.ConnMaxLifetime {
+	if cp.options.ConnMaxLifetime > 0 && now.Sub(conn.getCreatedAt()) >= cp.options.ConnMaxLifetime {
 		return false
 	}
 
-	_ = conn.netconn.SetDeadline(time.Time{})
+	_ = conn.getNetConn().SetDeadline(time.Now().Add(1 * time.Second))
 
-	sysConn, ok := conn.netconn.(syscall.Conn)
+	sysConn, ok := conn.getNetConn().(syscall.Conn)
 	if !ok {
 		return true
 	}
@@ -159,11 +170,11 @@ func (cp *connPool) isActiveConnection(conn *Conn) bool {
 		return false
 	}
 
-	conn.SetUsedAt(now)
+	conn.setUsedAt(now)
 	return true
 }
 
-func (cp *connPool) acquireIdleConnection() (*Conn, error) {
+func (cp *connPool) acquireIdleConnection() (connInterface, error) {
 	if cp.closed() {
 		return nil, ErrConnectionPoolClosed
 	}
@@ -181,13 +192,13 @@ func (cp *connPool) acquireIdleConnection() (*Conn, error) {
 	return conn, nil
 }
 
-func (cp *connPool) ReleaseConn(ctx context.Context, conn *Conn) {
-	if conn.reader.Buffered() > 0 {
+func (cp *connPool) ReleaseConn(ctx context.Context, conn connInterface) {
+	if conn.getReader().Buffered() > 0 {
 		cp.Remove(ctx, conn)
 		return
 	}
 
-	if !conn.pooled {
+	if !conn.getPooled() {
 		cp.Remove(ctx, conn)
 		return
 	}
@@ -196,7 +207,7 @@ func (cp *connPool) ReleaseConn(ctx context.Context, conn *Conn) {
 
 	cp.connMutex.Lock()
 
-	if cp.numIdleConns >= cp.options.ConnPoolsize {
+	if cp.numIdleConns < cp.options.ConnPoolsize {
 		cp.idleConnections = append(cp.idleConnections, conn)
 		cp.numIdleConns++
 	} else {
@@ -213,28 +224,28 @@ func (cp *connPool) ReleaseConn(ctx context.Context, conn *Conn) {
 	}
 }
 
-func (cp *connPool) Remove(_ context.Context, conn *Conn) {
+func (cp *connPool) Remove(_ context.Context, conn connInterface) {
 	cp.removeConnFromPoolWithLock(conn)
 	cp.freeTurn()
 	cp.closeConn(conn)
 }
 
-func (cp *connPool) CloseConn(conn *Conn) error {
+func (cp *connPool) CloseConn(conn connInterface) error {
 	cp.removeConnFromPoolWithLock(conn)
 	return cp.closeConn(conn)
 }
 
-func (cp *connPool) removeConnFromPoolWithLock(conn *Conn) {
+func (cp *connPool) removeConnFromPoolWithLock(conn connInterface) {
 	cp.connMutex.Lock()
 	defer cp.connMutex.Unlock()
 	cp.removeConnFromPool(conn)
 }
 
-func (cp *connPool) removeConnFromPool(conn *Conn) {
+func (cp *connPool) removeConnFromPool(conn connInterface) {
 	for index, currConn := range cp.connections {
 		if currConn == conn {
 			cp.connections = append(cp.connections[:index], cp.connections[index+1:]...)
-			if conn.pooled {
+			if conn.getPooled() {
 				cp.poolsize--
 			}
 			break
@@ -242,8 +253,8 @@ func (cp *connPool) removeConnFromPool(conn *Conn) {
 	}
 }
 
-func (cp *connPool) closeConn(conn *Conn) error {
-	return conn.Close()
+func (cp *connPool) closeConn(conn connInterface) error {
+	return conn.close()
 }
 
 // Len returns total number of connections.
@@ -266,21 +277,6 @@ func (cp *connPool) closed() bool {
 	return atomic.LoadUint32(&cp.isClosed) == 1
 }
 
-func (cp *connPool) Filter(fn func(*Conn) bool) error {
-	cp.connMutex.Lock()
-	defer cp.connMutex.Unlock()
-
-	var firstErr error
-	for _, cn := range cp.connections {
-		if fn(cn) {
-			if err := cp.closeConn(cn); err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
-	}
-	return firstErr
-}
-
 func (cp *connPool) Close() error {
 	if !atomic.CompareAndSwapUint32(&cp.isClosed, 0, 1) {
 		return ErrConnectionPoolClosed
@@ -288,9 +284,11 @@ func (cp *connPool) Close() error {
 
 	var firstErr error
 	cp.connMutex.Lock()
-	for _, cn := range cp.connections {
-		if err := cp.closeConn(cn); err != nil && firstErr == nil {
-			firstErr = err
+	for _, conn := range cp.connections {
+		if conn != nil {
+			if err := cp.closeConn(conn); err != nil && firstErr == nil {
+				firstErr = err
+			}
 		}
 	}
 
@@ -313,15 +311,13 @@ func newConnPool(opts *Options) (*connPool, error) {
 	pool := &connPool{
 		options:         opts,
 		connMutex:       sync.Mutex{},
-		connections:     make([]*Conn, opts.ConnPoolsize),
-		idleConnections: make([]*Conn, 0, opts.ConnPoolsize),
+		connections:     make([]connInterface, 0, opts.ConnPoolsize),
+		idleConnections: make([]connInterface, 0, opts.ConnPoolsize),
 		waitQueue:       make(chan struct{}, opts.ConnPoolsize*2),
-		poolsize:        int64(opts.ConnPoolsize),
+		poolsize:        0,
 		numIdleConns:    0,
 		isClosed:        0,
 	}
-	if pool.connections == nil {
-		pool.connections = make([]*Conn, opts.ConnPoolsize)
-	}
+
 	return pool, nil
 }
