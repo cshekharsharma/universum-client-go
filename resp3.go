@@ -2,6 +2,7 @@ package universum
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -43,6 +44,18 @@ func encodeResp(value interface{}) (string, error) {
 		return "," + fmt.Sprintf("%f", v) + "\r\n", nil
 
 	case []interface{}:
+		resp := "*" + strconv.Itoa(len(v)) + "\r\n"
+		for _, elem := range v {
+			encodedElem, err := encodeResp(elem)
+			if err != nil {
+				return "", err
+			}
+
+			resp += encodedElem
+		}
+		return resp, nil
+
+	case []string:
 		resp := "*" + strconv.Itoa(len(v)) + "\r\n"
 		for _, elem := range v {
 			encodedElem, err := encodeResp(elem)
@@ -126,7 +139,7 @@ func decodeResp(reader *bufio.Reader) (interface{}, error) {
 			return nil, err
 		}
 
-		return fmt.Errorf(string(line)), nil
+		return errors.New(string(line)), nil
 
 	case ':': // Integer
 		line, _, err := reader.ReadLine()

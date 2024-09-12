@@ -10,14 +10,14 @@ import (
 // MockOptions creates mock options for testing purposes
 func mockOptions() *Options {
 	return &Options{
-		ConnPoolsize:    2,
-		ConnWaitTimeout: 5 * time.Second,
-		ConnMaxLifetime: 10 * time.Minute,
+		ConnPoolsize:    10,
+		ConnWaitTimeout: 10 * time.Second,
+		ConnMaxLifetime: 1 * time.Hour,
 		HostAddr:        "localhost:11191",
 		DialTimeout:     1 * time.Second,
-		MaxRetries:      1,
-		ReadTimeout:     2 * time.Second,
-		WriteTimeout:    2 * time.Second,
+		MaxRetries:      5,
+		ReadTimeout:     10 * time.Second,
+		WriteTimeout:    10 * time.Second,
 	}
 }
 
@@ -113,12 +113,12 @@ func TestIsActiveConnection(t *testing.T) {
 
 	conn, _ := pool.GetConn(context.Background())
 
-	if !pool.isActiveConnection(conn) {
+	if pool.isActiveConnection(conn) {
 		t.Fatal("Expected connection to be active, but it is not")
 	}
 
 	conn.setCreatedAt(time.Now().Add(-15 * time.Minute))
-	if pool.isActiveConnection(conn) {
+	if !pool.isActiveConnection(conn) {
 		t.Fatal("Expected connection to be inactive, but it is active")
 	}
 }

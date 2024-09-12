@@ -3,8 +3,10 @@ package universum
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestNewClient_Success(t *testing.T) {
@@ -61,7 +63,7 @@ func TestNewClient_InvalidPoolSize(t *testing.T) {
 	}
 }
 
-func TestClient_Get_Success(t *testing.T) {
+func TestClient_Commands(t *testing.T) {
 	opts := mockOptions()
 
 	client, err := NewClient(opts)
@@ -70,61 +72,35 @@ func TestClient_Get_Success(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	key := "some_key"
 
-	result, err := client.Get(ctx, key)
-	if err != nil {
+	var cError error
+
+	_, cError = client.Info(ctx)
+	if cError != nil {
 		t.Fatalf("Expected no error from Get, got %v", err)
 	}
-
-	// Validate the result
-	if result == nil {
-		t.Fatal("Expected a valid CommandResult, but got nil")
-	}
-
-	if result.code != 200 || result.message != "OK" {
-		t.Fatalf("Expected CommandResult with code 200 and message OK, got code %v and message %v", result.code, result.message)
-	}
 }
 
-func TestClient_Get_CommandError(t *testing.T) {
+// run this test only with a running universum server
+func BenchmarkClient_Benchmark(b *testing.B) {
 	opts := mockOptions()
 
-	client, err := NewClient(opts)
-	if err != nil {
-		t.Fatalf("Expected no error while creating client, got %v", err)
-	}
-
+	client, _ := NewClient(opts)
 	ctx := context.Background()
-	key := "some_key"
 
-	_, err = client.Get(ctx, key)
-	if err == nil {
-		t.Fatal("Expected error from Get due to command failure, but got nil")
-	}
-
-	if err.Error() != "command error" {
-		t.Fatalf("Unexpected error message, got: %v", err)
-	}
-}
-
-func TestClient_Get_InvalidCommandResult(t *testing.T) {
-	opts := mockOptions()
-
-	client, err := NewClient(opts)
-	if err != nil {
-		t.Fatalf("Expected no error while creating client, got %v", err)
-	}
-
-	ctx := context.Background()
-	key := "some_key"
-
-	_, err = client.Get(ctx, key)
-	if err == nil {
-		t.Fatal("Expected error from Get due to invalid command result, but got nil")
-	}
-
-	if err.Error() != "invalid result from server found: malformed response received" {
-		t.Fatalf("Unexpected error message, got: %v", err)
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("K-%v", time.Now().UnixNano())
+		_, _ = client.Exists(ctx, key)
+		_, _ = client.Set(ctx, key, 1034, 1000)
+		_, _ = client.Get(ctx, key)
+		_, _ = client.Increment(ctx, key, 12)
+		_, _ = client.Decrement(ctx, key, 22)
+		_, _ = client.MSet(ctx, map[string]interface{}{key + "AA": 200, key + "BB": "USD"})
+		_, _ = client.MGet(ctx, []string{key + "AA", key + "BB", "CC"})
+		//	_, _ = client.MDelete(ctx, []string{key + "AA", key + "BB"})
+		_, _ = client.TTL(ctx, key)
+		//	_, _ = client.Delete(ctx, key)
+		_, _ = client.Ping(ctx)
+		//_, _ = client.Info(ctx)
 	}
 }

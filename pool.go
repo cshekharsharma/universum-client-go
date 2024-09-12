@@ -34,10 +34,15 @@ type connPool struct {
 
 func (cp *connPool) createConn() (connInterface, error) {
 	conn, err := newConnection(cp.options)
+	if err != nil {
+		return nil, err
+	}
+
 	if cp.poolsize < cp.options.ConnPoolsize {
 		conn.setPooled(true)
 		cp.poolsize++
 	}
+
 	return conn, err
 }
 

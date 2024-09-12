@@ -13,9 +13,12 @@ var (
 
 	ErrCommandEncodingFailed = errors.New("CMD_ENCODING_FAILED")
 	ErrSocketWriteFailed     = errors.New("SOCKET_WRITE_FAILED")
+	ErrIncompleteSocketWrite = errors.New("INCOMPLETE_SOCKET_WRITE")
+	ErrSocketFlushFailed     = errors.New("SOCKET_FLUSH_FAILED")
 	ErrSocketReadFailed      = errors.New("SOCKET_READ_FAILED")
 
 	ErrMalformedResponseReceived = errors.New("MALFORMED_RESPONSE_RECEIVED")
+	ErrServerRejectedRequested   = errors.New("SERVER_REJECTED_REQUESTED")
 )
 
 // Universum error codes

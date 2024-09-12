@@ -1,5 +1,5 @@
 package universum
 
 func Version() string {
-	return "v0.0.1-alpha"
+	return "v0.0.1"
 }

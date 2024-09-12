@@ -163,8 +163,6 @@ func newConnection(opts *Options) (connInterface, error) {
 		dialedConn, connErr = dialer.DialContext(ctx, tcpDialer, opts.HostAddr)
 
 		if connErr != nil {
-			dialedConn.Close()
-
 			if ctx.Err() == context.DeadlineExceeded {
 				connErr = fmt.Errorf("dial to host %s failed due to timeout after %s: %w",
 					opts.HostAddr, opts.DialTimeout, ErrConnectionDialTimeout)

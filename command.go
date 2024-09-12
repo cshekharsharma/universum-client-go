@@ -1,7 +1,12 @@
 package universum
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"fmt"
+	"io"
+	"time"
 )
 
 const (
@@ -23,30 +28,96 @@ const (
 	commandHelp     string = "HELP"
 )
 
-type CommandResult struct {
-	value   interface{}
-	code    int64
-	message string
-}
+const remoteByteDelimiter = "\x04\x04\x04\x04"
 
-func toCommandResult(result interface{}) (*CommandResult, error) {
-	if result == nil {
-		return nil, fmt.Errorf("empty result from server found: %w", ErrMalformedResponseReceived)
+func sendCommand(ctx context.Context, c *Client, command string, args ...interface{}) (*CommandResult, error) {
+	conn, err := c.pool.GetConn(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	if res, ok := result.([]interface{}); ok && len(res) == 3 {
-		value := res[0]
-		code, codeOk := res[1].(int64)
-		message, msgOk := res[2].(string)
+	defer c.pool.ReleaseConn(ctx, conn)
 
-		if codeOk && msgOk {
-			return &CommandResult{
-				value:   value,
-				code:    code,
-				message: message,
-			}, nil
+	cmdInput := make([]interface{}, 0, len(args)+1)
+	cmdInput = append(cmdInput, command)
+	cmdInput = append(cmdInput, args...)
+
+	encodedCommand, err := encodeResp(cmdInput)
+	if err != nil {
+		return nil, fmt.Errorf("resp encoding failed before sending the command: %w", ErrCommandEncodingFailed)
+	}
+
+	if c.opts.WriteTimeout > 0 {
+		err := conn.getNetConn().SetWriteDeadline(time.Now().Add(c.opts.WriteTimeout))
+		if err != nil {
+			return nil, fmt.Errorf("failed to set write deadline: %v", err)
 		}
 	}
 
-	return nil, fmt.Errorf("invalid result from server found: %w", ErrMalformedResponseReceived)
+	bytesWritten, err := conn.write([]byte(encodedCommand))
+	if err != nil {
+		return nil, fmt.Errorf("failed while writing bytes to the socket: %w", ErrSocketWriteFailed)
+	}
+	if bytesWritten != len(encodedCommand) {
+		return nil, fmt.Errorf("incomplete write: wrote %d/%d bytes: %w",
+			bytesWritten, len(encodedCommand), ErrIncompleteSocketWrite)
+	}
+
+	if err := conn.getWriter().Flush(); err != nil {
+		return nil, fmt.Errorf("failed to flush writer: %w", ErrSocketFlushFailed)
+	}
+
+	decodedBuffer, err := readUntilDelimiter(conn, c.opts, remoteByteDelimiter)
+	if err != nil {
+		return nil, fmt.Errorf("failed while reading bytes from the socket: [%v] %w", err, ErrSocketReadFailed)
+	}
+
+	decoded, err := decodeResp(bufio.NewReader(decodedBuffer))
+	if _, ok := decoded.(error); ok {
+		return nil, fmt.Errorf("server rejected the request: %v : %w", decoded, ErrServerRejectedRequested)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return toCommandResult(decoded)
+}
+
+func readUntilDelimiter(conn connInterface, opts *Options, delim string) (*bytes.Buffer, error) {
+	delimiterBytes := []byte(delim)
+	delimiterLen := len(delimiterBytes)
+
+	if opts.ReadTimeout > 0 {
+		err := conn.getNetConn().SetReadDeadline(time.Now().Add(opts.ReadTimeout))
+		if err != nil {
+			return nil, fmt.Errorf("failed to set read deadline: %v", err)
+		}
+	}
+
+	reader := conn.getReader()
+	var buffer bytes.Buffer
+	var decoderBuffer bytes.Buffer
+	pipe := make([]byte, 1024) // Read in chunks
+
+	for {
+		chunkSize, err := reader.Read(pipe)
+		if err != nil {
+			if err == io.EOF && buffer.Len() > 0 {
+				// If EOF is received but some data is present, return what we have.
+				break
+			}
+			return nil, fmt.Errorf("error reading from connection: %v", err)
+		}
+
+		buffer.Write(pipe[:chunkSize])
+		decoderBuffer.Write(pipe[:chunkSize])
+
+		if buffer.Len() >= delimiterLen && bytes.HasSuffix(buffer.Bytes(), delimiterBytes) {
+			decoderBuffer.Truncate(decoderBuffer.Len() - delimiterLen)
+			break
+		}
+	}
+
+	return &decoderBuffer, nil
 }
