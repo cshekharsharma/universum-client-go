@@ -41,7 +41,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/cshekharsharma/universum"
+	"github.com/cshekharsharma/universum-client-go"
 )
 
 func main() {
