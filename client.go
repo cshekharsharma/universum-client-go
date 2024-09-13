@@ -64,6 +64,15 @@ func (c *Client) Get(ctx context.Context, key string) (*GetResult, error) {
 // - *SetResult: The result of the SET operation.
 // - error: Returns an error if the command fails.
 func (c *Client) Set(ctx context.Context, key string, value interface{}, ttl int64) (*SetResult, error) {
+	if c.opts.IsReadonly {
+		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
+	if !isWriteableDatatype(value) {
+		return nil, fmt.Errorf("provided datatype is not supported for write operations, "+
+			"only int|float|bool|string|[]interface{} types are supported: %w", ErrInvalidDatatype)
+	}
+
 	result, err := sendCommand(ctx, c, commandSet, key, value, ttl)
 	if err != nil {
 		return nil, err
@@ -114,6 +123,10 @@ func (c *Client) Exists(ctx context.Context, key string) (*ExistsResult, error) 
 // - *DeleteResult: The result of the DELETE operation.
 // - error: Returns an error if the command fails.
 func (c *Client) Delete(ctx context.Context, key string) (*DeleteResult, error) {
+	if c.opts.IsReadonly {
+		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
 	result, err := sendCommand(ctx, c, commandDelete, key)
 	if err != nil {
 		return nil, err
@@ -140,6 +153,10 @@ func (c *Client) Delete(ctx context.Context, key string) (*DeleteResult, error) 
 // - *IncrementResult: The result of the INCREMENT operation.
 // - error: Returns an error if the command fails.
 func (c *Client) Increment(ctx context.Context, key string, offset int64) (*IncrementResult, error) {
+	if c.opts.IsReadonly {
+		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
 	result, err := sendCommand(ctx, c, commandIncr, key, offset)
 	if err != nil {
 		return nil, err
@@ -166,6 +183,10 @@ func (c *Client) Increment(ctx context.Context, key string, offset int64) (*Incr
 // - *DecrementResult: The result of the DECREMENT operation.
 // - error: Returns an error if the command fails.
 func (c *Client) Decrement(ctx context.Context, key string, offset int64) (*DecrementResult, error) {
+	if c.opts.IsReadonly {
+		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
 	result, err := sendCommand(ctx, c, commandDecr, key, offset)
 	if err != nil {
 		return nil, err
@@ -192,6 +213,10 @@ func (c *Client) Decrement(ctx context.Context, key string, offset int64) (*Decr
 // - *AppendResult: The result of the APPEND operation.
 // - error: Returns an error if the command fails.
 func (c *Client) Append(ctx context.Context, key string, value string) (*AppendResult, error) {
+	if c.opts.IsReadonly {
+		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
 	result, err := sendCommand(ctx, c, commandAppend, key, value)
 
 	if err != nil {
@@ -244,6 +269,10 @@ func (c *Client) MGet(ctx context.Context, keys []string) (*MGetResult, error) {
 // - *MSetResult: The result of the MSET operation.
 // - error: Returns an error if the command fails.
 func (c *Client) MSet(ctx context.Context, kv map[string]interface{}) (*MSetResult, error) {
+	if c.opts.IsReadonly {
+		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
 	result, err := sendCommand(ctx, c, commandMset, kv)
 
 	if err != nil {
@@ -251,7 +280,7 @@ func (c *Client) MSet(ctx context.Context, kv map[string]interface{}) (*MSetResu
 	}
 
 	if successes, ok := result.value.(map[string]interface{}); ok {
-		if converted, err := ConvertToStringBool(successes); err == nil {
+		if converted, err := convertToStringBool(successes); err == nil {
 			return &MSetResult{
 				Successes: converted,
 				Code:      result.code,
@@ -272,6 +301,10 @@ func (c *Client) MSet(ctx context.Context, kv map[string]interface{}) (*MSetResu
 // - *MDeleteResult: The result of the MDELETE operation.
 // - error: Returns an error if the command fails.
 func (c *Client) MDelete(ctx context.Context, keys []string) (*MDeleteResult, error) {
+	if c.opts.IsReadonly {
+		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
 	result, err := sendCommand(ctx, c, commandMdelete, keys)
 
 	if err != nil {
@@ -279,7 +312,7 @@ func (c *Client) MDelete(ctx context.Context, keys []string) (*MDeleteResult, er
 	}
 
 	if deletions, ok := result.value.(map[string]interface{}); ok {
-		if converted, err := ConvertToStringBool(deletions); err == nil {
+		if converted, err := convertToStringBool(deletions); err == nil {
 			return &MDeleteResult{
 				Deletions: converted,
 				Code:      result.code,
@@ -377,6 +410,10 @@ func (c *Client) TTL(ctx context.Context, key string) (*TTLResult, error) {
 // - *ExpireResult: The result of the EXPIRE operation.
 // - error: Returns an error if the command fails.
 func (c *Client) Expire(ctx context.Context, key string, ttl int64) (*ExpireResult, error) {
+	if c.opts.IsReadonly {
+		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
 	result, err := sendCommand(ctx, c, commandExpire, key, ttl)
 
 	if err != nil {

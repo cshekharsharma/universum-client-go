@@ -19,6 +19,9 @@ var (
 
 	ErrMalformedResponseReceived = errors.New("MALFORMED_RESPONSE_RECEIVED")
 	ErrServerRejectedRequested   = errors.New("SERVER_REJECTED_REQUESTED")
+
+	ErrClientReadonly  = errors.New("CLIENT_READONLY")
+	ErrInvalidDatatype = errors.New("INVALID_DATATYPE")
 )
 
 // Universum error codes
@@ -44,8 +47,27 @@ const (
 	RespRecordExpired    uint32 = 5002
 	RespRecordNotDeleted uint32 = 5003
 	RespIncrInvalidType  uint32 = 5004
+
+	RespRecordTooBig     uint32 = 5005
+	RespIinvalidDatatype uint32 = 5006
 )
 
 var (
 	errUnexpectedRead = errors.New("unexpected read from socket")
 )
+
+func isWriteableDatatype(value interface{}) bool {
+	switch value.(type) {
+	case string,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64, bool:
+		return true
+
+	case []interface{}:
+		return true
+
+	default:
+		return false
+	}
+}

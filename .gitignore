@@ -20,7 +20,6 @@ RELEASE
 /.ptp-sync/
 bin/universum
 config/config.json
-universum
 *.log
 __debug_bin*
 *.swp

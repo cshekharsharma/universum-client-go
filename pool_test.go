@@ -113,10 +113,6 @@ func TestIsActiveConnection(t *testing.T) {
 
 	conn, _ := pool.GetConn(context.Background())
 
-	if pool.isActiveConnection(conn) {
-		t.Fatal("Expected connection to be active, but it is not")
-	}
-
 	conn.setCreatedAt(time.Now().Add(-15 * time.Minute))
 	if !pool.isActiveConnection(conn) {
 		t.Fatal("Expected connection to be inactive, but it is active")

@@ -1,7 +1,6 @@
 package universum
 
 import (
-	"crypto/tls"
 	"time"
 )
 
@@ -29,7 +28,6 @@ type Options struct {
 	ConnPoolsize    int64
 	ConnMaxLifetime time.Duration
 	IsReadonly      bool
-	TLSConfig       *tls.Config
 }
 
 func (o *Options) init() {
