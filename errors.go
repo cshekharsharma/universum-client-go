@@ -18,8 +18,9 @@ var (
 	ErrSocketReadFailed      = errors.New("SOCKET_READ_FAILED")
 
 	ErrMalformedResponseReceived = errors.New("MALFORMED_RESPONSE_RECEIVED")
-	ErrServerRejectedRequested   = errors.New("SERVER_REJECTED_REQUESTED")
+	ErrServerRejectedRequest     = errors.New("SERVER_REJECTED_REQUEST")
 
+	ErrInvalidRequest  = errors.New("INVALID_REQUEST")
 	ErrClientReadonly  = errors.New("CLIENT_READONLY")
 	ErrInvalidDatatype = errors.New("INVALID_DATATYPE")
 )

@@ -42,14 +42,16 @@ func (c *Client) Get(ctx context.Context, key string) (*GetResult, error) {
 		return nil, err
 	}
 
-	if decoded, ok := result.value.(map[string]interface{}); ok {
-		return &GetResult{
-			Value: decoded["Value"],
-			Code:  result.code,
-		}, nil
+	getResult := &GetResult{Value: nil, Code: result.code}
+
+	if result.value == nil {
+		return getResult, nil
+	} else if decoded, ok := result.value.(map[string]interface{}); ok {
+		getResult.Value = decoded["Value"]
+		return getResult, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Set sets the value of a specified key in the Universum database with an optional TTL (time-to-live).
@@ -85,7 +87,7 @@ func (c *Client) Set(ctx context.Context, key string, value interface{}, ttl int
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Exists checks if a specified key exists in the Universum database.
@@ -110,7 +112,7 @@ func (c *Client) Exists(ctx context.Context, key string) (*ExistsResult, error) 
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Delete removes the specified key from the Universum database.
@@ -139,7 +141,7 @@ func (c *Client) Delete(ctx context.Context, key string) (*DeleteResult, error) 
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Increment increases the value of a numeric key by the specified offset.
@@ -169,7 +171,7 @@ func (c *Client) Increment(ctx context.Context, key string, offset int64) (*Incr
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Decrement decreases the value of a numeric key by the specified offset.
@@ -199,7 +201,7 @@ func (c *Client) Decrement(ctx context.Context, key string, offset int64) (*Decr
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Append adds the specified string to the value of an existing string key.
@@ -230,7 +232,7 @@ func (c *Client) Append(ctx context.Context, key string, value string) (*AppendR
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // MGet retrieves the values of multiple keys from the Universum database.
@@ -243,6 +245,10 @@ func (c *Client) Append(ctx context.Context, key string, value string) (*AppendR
 // - *MGetResult: The result of the MGET operation.
 // - error: Returns an error if the command fails.
 func (c *Client) MGet(ctx context.Context, keys []string) (*MGetResult, error) {
+	if len(keys) < 1 {
+		return nil, fmt.Errorf("MGET requires at least one key: %w", ErrInvalidRequest)
+	}
+
 	result, err := sendCommand(ctx, c, commandMget, keys)
 
 	if err != nil {
@@ -256,7 +262,7 @@ func (c *Client) MGet(ctx context.Context, keys []string) (*MGetResult, error) {
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // MSet sets multiple key-value pairs in the Universum database.
@@ -271,6 +277,10 @@ func (c *Client) MGet(ctx context.Context, keys []string) (*MGetResult, error) {
 func (c *Client) MSet(ctx context.Context, kv map[string]interface{}) (*MSetResult, error) {
 	if c.opts.IsReadonly {
 		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
+	if len(kv) < 1 {
+		return nil, fmt.Errorf("MSET requires at least one key: %w", ErrInvalidRequest)
 	}
 
 	result, err := sendCommand(ctx, c, commandMset, kv)
@@ -288,7 +298,7 @@ func (c *Client) MSet(ctx context.Context, kv map[string]interface{}) (*MSetResu
 		}
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // MDelete deletes multiple keys from the Universum database.
@@ -303,6 +313,10 @@ func (c *Client) MSet(ctx context.Context, kv map[string]interface{}) (*MSetResu
 func (c *Client) MDelete(ctx context.Context, keys []string) (*MDeleteResult, error) {
 	if c.opts.IsReadonly {
 		return nil, fmt.Errorf("cannot execute write op in read-only client: %w", ErrClientReadonly)
+	}
+
+	if len(keys) < 1 {
+		return nil, fmt.Errorf("MDELETE requires at least one key: %w", ErrInvalidRequest)
 	}
 
 	result, err := sendCommand(ctx, c, commandMdelete, keys)
@@ -320,7 +334,7 @@ func (c *Client) MDelete(ctx context.Context, keys []string) (*MDeleteResult, er
 		}
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Info retrieves general information about the Universum database.
@@ -345,7 +359,7 @@ func (c *Client) Info(ctx context.Context) (*InfoResult, error) {
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Ping sends a ping to the Universum database to check if it is reachable.
@@ -370,7 +384,7 @@ func (c *Client) Ping(ctx context.Context) (*PingResult, error) {
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // TTL retrieves the time-to-live (TTL) value of a specified key.
@@ -396,7 +410,7 @@ func (c *Client) TTL(ctx context.Context, key string) (*TTLResult, error) {
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // Expire sets the time-to-live (TTL) for a specified key.
@@ -427,7 +441,7 @@ func (c *Client) Expire(ctx context.Context, key string, ttl int64) (*ExpireResu
 		}, nil
 	}
 
-	return nil, fmt.Errorf("response value found in expected format: %w", ErrMalformedResponseReceived)
+	return nil, fmt.Errorf("response value found in unexpected format: %w", ErrMalformedResponseReceived)
 }
 
 // NewClient creates and returns a new Client instance based on the provided options.

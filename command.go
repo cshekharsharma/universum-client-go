@@ -74,7 +74,7 @@ func sendCommand(ctx context.Context, c *Client, command string, args ...interfa
 
 	decoded, err := decodeResp(bufio.NewReader(decodedBuffer))
 	if _, ok := decoded.(error); ok {
-		return nil, fmt.Errorf("server rejected the request: %v : %w", decoded, ErrServerRejectedRequested)
+		return nil, fmt.Errorf("server rejected the request: %v : %w", decoded, ErrServerRejectedRequest)
 	}
 
 	if err != nil {
