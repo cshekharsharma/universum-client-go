@@ -443,8 +443,8 @@ func NewClient(opts *Options) (*Client, error) {
 	ncmu.Lock()
 	defer ncmu.Unlock()
 
-	opts.init()
-	connPool, err := newConnPool(opts)
+	opts.Init()
+	 , err := newConnPool(opts)
 
 	if err != nil {
 		return nil, err

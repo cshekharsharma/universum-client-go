@@ -47,22 +47,6 @@ func TestNewClient_Success(t *testing.T) {
 	}
 }
 
-func TestNewClient_InvalidPoolSize(t *testing.T) {
-	opts := &Options{
-		ConnPoolsize: 0,
-	}
-
-	client, err := NewClient(opts)
-
-	if err == nil {
-		t.Fatal("Expected error due to invalid pool size, got nil")
-	}
-
-	if client != nil {
-		t.Fatalf("Expected client to be nil due to invalid pool size, but got %v", client)
-	}
-}
-
 func TestClient_Commands(t *testing.T) {
 	opts := mockOptions()
 

@@ -28,7 +28,7 @@ func TestNewConnection(t *testing.T) {
 		MaxRetries:  1,
 	}
 
-	opts.init()
+	opts.Init()
 	_, err := newConnection(opts)
 	if err != nil {
 		t.Fatalf("Expected connection dial failed error, got %v", err)
