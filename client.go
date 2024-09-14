@@ -444,7 +444,7 @@ func NewClient(opts *Options) (*Client, error) {
 	defer ncmu.Unlock()
 
 	opts.Init()
-	 , err := newConnPool(opts)
+	connPool, err := newConnPool(opts)
 
 	if err != nil {
 		return nil, err
