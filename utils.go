@@ -17,3 +17,19 @@ func convertToStringBool(input map[string]interface{}) (map[string]bool, error) 
 
 	return result, nil
 }
+
+func isWriteableDatatype(value interface{}) bool {
+	switch value.(type) {
+	case string,
+		int, int8, int16, int32, uint32,
+		uint, uint8, uint16, int64, uint64,
+		float32, float64, bool:
+		return true
+
+	case []interface{}:
+		return true
+
+	default:
+		return false
+	}
+}

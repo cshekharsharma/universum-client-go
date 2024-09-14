@@ -23,7 +23,6 @@ GOINSTALL   := $(GOCMD) install # Command to install Go packages
 STATICCHECK := staticcheck     # Command to run static analysis on Go code
 
 # Target: help
-# Description: List all make targets with descriptions
 .PHONY: help
 help:
 	@printf "\n${YELLOW}Makefile Targets:${NC}\n\n"
@@ -31,7 +30,6 @@ help:
 	@printf "  ${GREEN}test${NC}           - Run unit tests\n"
 
 # Target: configure
-# Description: Configure the project by tidying and verifying the modules, formatting the code, and running static analysis.
 .PHONY: configure
 configure:
 	@printf "\n${YELLOW}CONFIGURING THE PACKAGE...${NC}\n\n"
@@ -43,7 +41,6 @@ configure:
 	@printf "\n"
 
 # Target: test
-# Description: Run unit tests for the project.
 .PHONY: test
 test:
 	@printf "\n${YELLOW}RUNNING UNIT TESTS...${NC}\n\n"

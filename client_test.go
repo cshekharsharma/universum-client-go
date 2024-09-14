@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -56,91 +57,173 @@ func TestClient_Commands(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	var cError error
+	intKey := fmt.Sprintf("int-%v", time.Now().UnixNano())
+	stringKey := fmt.Sprintf("string-%v", time.Now().UnixNano())
+	listKey := fmt.Sprintf("list-%v", time.Now().UnixNano())
 
-	info, cError := client.Info(ctx)
-	if cError != nil {
-		t.Fatalf("Expected no error from Get, got %v", err)
-	}
-	t.Logf("Exists: %v\n", info)
-
-	key := "abcd"
-	suffixAA := key + "AA"
-	suffixBB := key + "BB"
-	suffixCC := "CC"
-
-	res1, err := client.Exists(ctx, key)
+	pingResult, err := client.Ping(ctx)
 	if err != nil {
-		t.Fatalf("Expected no error from Exists, got %v\n", err)
+		t.Fatalf("Ping:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(pingResult.Code, pingResult.Message, RespPingSuccess, "OK"); err != nil {
+		t.Fatal("Ping: " + err.Error())
 	}
-	t.Logf("Exists: %v\n", res1)
 
-	res2, err := client.Set(ctx, key, 1034, 1000)
+	// Get non-existant key
+	getResult, err := client.Get(ctx, intKey)
 	if err != nil {
-		t.Fatalf("Expected no error from Set, got %v\n", err)
+		t.Fatalf("GET:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(getResult.Code, getResult.Value, RespRecordNotFound, nil); err != nil {
+		t.Fatal("Get: " + err.Error())
 	}
-	t.Logf("Set: %v\n", res2)
 
-	res3, err := client.Get(ctx, key)
+	// Exists for non-existant key
+	existsResult, err := client.Exists(ctx, stringKey)
 	if err != nil {
-		t.Fatalf("Expected no error from Get, got %v\n", err)
+		t.Fatalf("EXISTS:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(existsResult.Code, existsResult.Found, RespRecordNotFound, false); err != nil {
+		t.Fatal("Exists: " + err.Error())
 	}
-	t.Logf("Get: %v\n", res3)
 
-	res4, err := client.Increment(ctx, key, 12)
+	// Set a key
+	setResult, err := client.Set(ctx, stringKey, "prefix_", 5)
 	if err != nil {
-		t.Fatalf("Expected no error from Increment, got %v\n", err)
+		t.Fatalf("Set:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(setResult.Code, setResult.Success, RespRecordUpdated, true); err != nil {
+		t.Fatal("Set: " + err.Error())
 	}
-	t.Logf("Increment: %v\n", res4)
 
-	res5, err := client.Decrement(ctx, key, 22)
+	time.Sleep(1 * time.Second) // Wait for a second to check TTL correctness
+
+	// TTL for existing key
+	ttlResult, err := client.TTL(ctx, stringKey)
 	if err != nil {
-		t.Fatalf("Expected no error from Decrement, got %v\n", err)
+		t.Fatalf("TTL:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(ttlResult.Code, ttlResult.TTL, RespRecordFound, 4*time.Second); err != nil {
+		t.Fatal("TTL: " + err.Error())
 	}
-	t.Logf("Decrement: %v\n", res5)
 
-	res6, err := client.MSet(ctx, map[string]interface{}{suffixAA: []interface{}{10, 20}, suffixBB: "USD"})
+	// Expire existing key
+	expireResult, err := client.Expire(ctx, stringKey, 8)
 	if err != nil {
-		t.Fatalf("Expected no error from MSet, got %v\n", err)
+		t.Fatalf("Expire:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(expireResult.Code, expireResult.Success, RespRecordUpdated, true); err != nil {
+		t.Fatal("Expire: " + err.Error())
 	}
-	t.Logf("MSet: %v\n", res6)
 
-	res7, err := client.MGet(ctx, []string{suffixAA, suffixBB, suffixCC})
+	// Append existing key
+	append2Result, err := client.Append(ctx, stringKey, "suffix")
 	if err != nil {
-		t.Fatalf("Expected no error from MGet, got %v\n", err)
+		t.Fatalf("Append2:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(append2Result.Code, append2Result.ContentLength, RespRecordUpdated, int64(13)); err != nil {
+		t.Fatal("Append2: " + err.Error())
 	}
-	t.Logf("MGet: %#v\n", res7)
 
-	res8, err := client.Append(ctx, suffixBB, "Only")
+	// Get existant key
+	getResult2, err := client.Get(ctx, stringKey)
 	if err != nil {
-		t.Fatalf("Expected no error from Append, got %v\n", err)
+		t.Fatalf("Get2:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(getResult2.Code, getResult2.Value, RespRecordFound, "prefix_suffix"); err != nil {
+		t.Fatal("Get2: " + err.Error())
 	}
-	t.Logf("Append: %v\n", res8)
 
-	res9, err := client.MDelete(ctx, []string{suffixAA, suffixBB})
+	time.Sleep(6 * time.Second) // Wait for a few seconds
+
+	// Exists for existant key
+	exists2Result, err := client.Exists(ctx, stringKey)
 	if err != nil {
-		t.Fatalf("Expected no error from MDelete, got %v\n", err)
+		t.Fatalf("Exists2:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(exists2Result.Code, exists2Result.Found, RespRecordFound, true); err != nil {
+		t.Fatal("Exists2: " + err.Error())
 	}
-	t.Logf("MDelete: %v\n", res9)
 
-	res10, err := client.TTL(ctx, key)
+	time.Sleep(4 * time.Second) // Wait for key to expire
+
+	// Append non-existing key
+	append1Result, err := client.Append(ctx, stringKey, "NextSuffix")
 	if err != nil {
-		t.Fatalf("Expected no error from TTL, got %v\n", err)
+		t.Fatalf("Append1:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(append1Result.Code, append1Result.ContentLength, RespRecordNotFound, int64(-99999999)); err != nil {
+		t.Fatal("Append1: " + err.Error())
 	}
-	t.Logf("TTL: %v\n", res10)
 
-	res11, err := client.Delete(ctx, key)
+	// MSet multiple keys
+	msetResult, err := client.MSet(ctx, map[string]interface{}{intKey: 990, listKey: []interface{}{true, 0}})
 	if err != nil {
-		t.Fatalf("Expected no error from Delete, got %v\n", err)
+		t.Fatalf("MSet:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(msetResult.Code, msetResult.Successes, RespMsetCompleted, map[string]bool{intKey: true, listKey: true}); err != nil {
+		t.Fatal("MSet: " + err.Error())
 	}
-	t.Logf("Delete: %v\n", res11)
 
-	res12, err := client.Ping(ctx)
+	// Increment existing key
+	incResult, err := client.Increment(ctx, intKey, 9)
 	if err != nil {
-		t.Fatalf("Expected no error from Ping, got %v\n", err)
+		t.Fatalf("Increment:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(incResult.Code, incResult.NewValue, RespRecordUpdated, int64(999)); err != nil {
+		t.Fatal("Increment: " + err.Error())
 	}
-	t.Logf("Ping: %v\n", res12)
 
+	// Decrement existing key
+	decrResult, err := client.Decrement(ctx, intKey, 20)
+	if err != nil {
+		t.Fatalf("Decrement:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(decrResult.Code, decrResult.NewValue, RespRecordUpdated, int64(979)); err != nil {
+		t.Fatal("Decrement: " + err.Error())
+	}
+
+	// Delete a key
+	deleteResult, err := client.Delete(ctx, intKey)
+	if err != nil {
+		t.Fatalf("Delete:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(deleteResult.Code, deleteResult.Deleted, RespRecordDeleted, true); err != nil {
+		t.Fatal("Delete: " + err.Error())
+	}
+
+	//MGet multiple keys
+	mgetResult, err := client.MGet(ctx, []string{intKey, stringKey, listKey})
+	if err != nil {
+		t.Fatalf("MGet:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(mgetResult.Code, mgetResult.Values, RespMgetCompleted,
+		map[string]interface{}{
+			intKey:    map[string]interface{}{"Code": RespRecordNotFound, "Value": interface{}(nil)},
+			stringKey: map[string]interface{}{"Code": RespRecordNotFound, "Value": interface{}(nil)},
+			listKey:   map[string]interface{}{"Code": RespRecordFound, "Value": []interface{}{true, int64(0)}},
+		}); err != nil {
+		t.Fatal("MGet: " + err.Error())
+	}
+
+	// MDelete multiple keys
+	mdelResult, err := client.MDelete(ctx, []string{intKey, stringKey, listKey})
+	if err != nil {
+		t.Fatalf("MDelete:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(mdelResult.Code, mdelResult.Deletions, RespMdelCompleted,
+		map[string]bool{intKey: true, stringKey: true, listKey: true}); err != nil {
+		t.Fatal("MDelete: " + err.Error())
+	}
+
+	// MGet multiple keys
+	mget2Result, err := client.MGet(ctx, []string{intKey, stringKey, listKey})
+	if err != nil {
+		t.Fatalf("MGet2:: Expected no error from Get, got %v", err)
+	} else if err = isSuccessResponse(mget2Result.Code, mget2Result.Values, RespMgetCompleted,
+		map[string]interface{}{
+			intKey:    map[string]interface{}{"Code": RespRecordNotFound, "Value": interface{}(nil)},
+			stringKey: map[string]interface{}{"Code": RespRecordNotFound, "Value": interface{}(nil)},
+			listKey:   map[string]interface{}{"Code": RespRecordNotFound, "Value": interface{}(nil)},
+		}); err != nil {
+		t.Fatal("MGet2: " + err.Error())
+	}
+}
+
+func isSuccessResponse(code int64, val interface{}, expectedCode int64, expectedVal interface{}) error {
+	if code != expectedCode {
+		return fmt.Errorf("Expected code to be %d, got %d", expectedCode, code)
+	}
+
+	if !reflect.DeepEqual(val, expectedVal) {
+		return fmt.Errorf("Expected value to be %#v, got %#v", expectedVal, val)
+	}
+
+	return nil
 }
 
 // run this test only with a running universum server
@@ -149,20 +232,23 @@ func BenchmarkClient_Benchmark(b *testing.B) {
 
 	client, _ := NewClient(opts)
 	ctx := context.Background()
+	var ttl int64 = 180
 
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("K-%v", time.Now().UnixNano())
 		_, _ = client.Exists(ctx, key)
-		_, _ = client.Set(ctx, key, 1034, 1000)
+		_, _ = client.Set(ctx, key, 1034, ttl)
 		_, _ = client.Get(ctx, key)
 		_, _ = client.Increment(ctx, key, 12)
 		_, _ = client.Decrement(ctx, key, 22)
 		_, _ = client.MSet(ctx, map[string]interface{}{key + "AA": 200, key + "BB": "USD"})
+		_, _ = client.Expire(ctx, key+"AA", ttl)
+		_, _ = client.Expire(ctx, key+"BB", ttl)
 		_, _ = client.MGet(ctx, []string{key + "AA", key + "BB", "CC"})
-		_, _ = client.MDelete(ctx, []string{key + "AA", key + "BB"})
+		//	_, _ = client.MDelete(ctx, []string{key + "AA", key + "BB"})
 		_, _ = client.TTL(ctx, key)
-		_, _ = client.Delete(ctx, key)
+		//	_, _ = client.Delete(ctx, key)
 		_, _ = client.Ping(ctx)
-		_, _ = client.Info(ctx)
+		//_, _ = client.Info(ctx)
 	}
 }
