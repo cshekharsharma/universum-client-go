@@ -68,7 +68,7 @@ func TestClient_Commands(t *testing.T) {
 		t.Fatal("Ping: " + err.Error())
 	}
 
-	// Get non-existant key
+	// Get non-existent key
 	getResult, err := client.Get(ctx, intKey)
 	if err != nil {
 		t.Fatalf("GET:: Expected no error from Get, got %v", err)
@@ -76,7 +76,7 @@ func TestClient_Commands(t *testing.T) {
 		t.Fatal("Get: " + err.Error())
 	}
 
-	// Exists for non-existant key
+	// Exists for non-existent key
 	existsResult, err := client.Exists(ctx, stringKey)
 	if err != nil {
 		t.Fatalf("EXISTS:: Expected no error from Get, got %v", err)
@@ -118,7 +118,7 @@ func TestClient_Commands(t *testing.T) {
 		t.Fatal("Append2: " + err.Error())
 	}
 
-	// Get existant key
+	// Get existent key
 	getResult2, err := client.Get(ctx, stringKey)
 	if err != nil {
 		t.Fatalf("Get2:: Expected no error from Get, got %v", err)
@@ -128,7 +128,7 @@ func TestClient_Commands(t *testing.T) {
 
 	time.Sleep(6 * time.Second) // Wait for a few seconds
 
-	// Exists for existant key
+	// Exists for existent key
 	exists2Result, err := client.Exists(ctx, stringKey)
 	if err != nil {
 		t.Fatalf("Exists2:: Expected no error from Get, got %v", err)
