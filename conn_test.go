@@ -23,7 +23,7 @@ func (m *MockNetConn) SetWriteDeadline(t time.Time) error { return nil }
 // TestNewConnection tests the creation of a new connection
 func TestNewConnection(t *testing.T) {
 	opts := &Options{
-		HostAddr:    "localhost:8080",
+		HostAddr:    "localhost:11191",
 		DialTimeout: 1 * time.Second,
 		MaxRetries:  1,
 	}
