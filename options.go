@@ -43,6 +43,12 @@ type Options struct {
 	ConnPoolsize    int64
 	ConnMaxLifetime time.Duration
 	IsReadonly      bool
+
+	EnableTLS          bool
+	TLSCertFile        string
+	TLSKeyFile         string
+	CAFile             string
+	InsecureSkipVerify bool
 }
 
 func (opts *Options) Init() {

@@ -232,7 +232,7 @@ func BenchmarkClient_Benchmark(b *testing.B) {
 
 	client, _ := NewClient(opts)
 	ctx := context.Background()
-	var ttl int64 = 180
+	var ttl int64 = 180000
 
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("K-%v", time.Now().UnixNano())
@@ -241,7 +241,7 @@ func BenchmarkClient_Benchmark(b *testing.B) {
 		_, _ = client.Get(ctx, key)
 		_, _ = client.Increment(ctx, key, 12)
 		_, _ = client.Decrement(ctx, key, 22)
-		_, _ = client.MSet(ctx, map[string]interface{}{key + "AA": 200, key + "BB": "USD"})
+		_, _ = client.MSet(ctx, map[string]interface{}{key + "AA": 200, key + "BB": "USD\nINR some dummy test for no reason"})
 		_, _ = client.Expire(ctx, key+"AA", ttl)
 		_, _ = client.Expire(ctx, key+"BB", ttl)
 		_, _ = client.MGet(ctx, []string{key + "AA", key + "BB", "CC"})

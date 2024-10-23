@@ -3,8 +3,11 @@ package universum
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
+	"os"
 	"sync/atomic"
 	"time"
 )
@@ -154,13 +157,41 @@ func newConnection(opts *Options) (connInterface, error) {
 	defer cancel()
 
 	var dialer net.Dialer = net.Dialer{}
+	var tlsConfig *tls.Config
 	var retryCount int64 = 0
 	var dialedConn net.Conn
 	var connErr error
 
+	if opts.EnableTLS {
+		cert, err := tls.LoadX509KeyPair(opts.TLSCertFile, opts.TLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load TLS certificate and key: %w", err)
+		}
+
+		caCertPool := x509.NewCertPool()
+		if opts.CAFile != "" {
+			caCert, err := os.ReadFile(opts.CAFile)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load CA certificate: %w", err)
+			}
+			caCertPool.AppendCertsFromPEM(caCert)
+		}
+
+		tlsConfig = &tls.Config{
+			Certificates:       []tls.Certificate{cert},
+			RootCAs:            caCertPool,
+			InsecureSkipVerify: opts.InsecureSkipVerify, // Option to skip server cert verification (not recommended)
+		}
+	}
+
 	for retryCount < opts.MaxRetries {
 		retryCount++
-		dialedConn, connErr = dialer.DialContext(ctx, tcpDialer, opts.HostAddr)
+
+		if opts.EnableTLS {
+			dialedConn, connErr = tls.DialWithDialer(&dialer, tcpDialer, opts.HostAddr, tlsConfig)
+		} else {
+			dialedConn, connErr = dialer.DialContext(ctx, tcpDialer, opts.HostAddr)
+		}
 
 		if connErr != nil {
 			if ctx.Err() == context.DeadlineExceeded {
